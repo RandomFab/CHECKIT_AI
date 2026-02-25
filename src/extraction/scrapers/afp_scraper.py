@@ -2,6 +2,7 @@ from bs4 import BeautifulSoup
 from src.extraction.core.selenium_scrapper import SeleniumScraper
 from config.config import BASE_DIR
 from config.logger import logger
+from src.extraction.scrapers.article_schema import ArticalSchema
 
 
 class AfpScrapper(SeleniumScraper):
@@ -101,16 +102,17 @@ class AfpScrapper(SeleniumScraper):
             content_blocks = self._parse_body_wrapper(soup2)
             logger.debug(f"[AFP] {len(content_blocks)} blocs extraits pour : {url}")
 
-            return {
-                "id": f"afp_{hash(url) % 100000:05d}",
-                "source": self.source_name,
-                "title": title,
-                "date": date,
-                "url": url,
-                "label": "Faux",
-                "main_image": main_image,
-                "content_blocks": content_blocks,
-            }
+            article = ArticalSchema(
+                id = f"afp_{hash(url) % 100000:05d}",
+                source = self.source_name,
+                title = title,
+                date = date,
+                url = url,
+                label = "Faux",
+                main_image = main_image,
+                content_blocks = content_blocks)
+            
+            return article.model_dump() 
 
         except Exception as e:
             logger.error(f"[AFP] Erreur inattendue sur {url} : {e}")
@@ -138,7 +140,7 @@ class AfpScrapper(SeleniumScraper):
             elif element.name == "div" and "wrapper-image" in (element.get("class") or []):
                 img = element.find("img")
                 if img and img.get("src"):
-                    blocks.append({"type": "image", "url": img.get("src")})
+                    blocks.append({"type": "image", "content": img.get("src")})
 
             elif element.name in ["h1", "h2", "h3", "h4"]:
                 text = element.get_text(strip=True)

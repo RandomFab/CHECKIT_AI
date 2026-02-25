@@ -48,3 +48,4 @@ class BaseScraper(ABC):
         data = self.extract()
         self.save(data)
         print(f"[{self.source_name}] Terminé")
+    
