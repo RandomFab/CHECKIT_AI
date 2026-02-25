@@ -4,7 +4,6 @@ scraper = AfpScrapper()
 
 data = scraper.extract()
 
-print(f"premier article  : {data[0]}")
-print(f"Nombre d'article : {len(data)}")
+print(f"premier article  : {data}")
 
 scraper.close()
