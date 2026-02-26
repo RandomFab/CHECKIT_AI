@@ -17,7 +17,7 @@ class SeleniumScraper(BaseScraper):
         options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         options.add_argument("--disable-blink-features=AutomationControlled")
         
-        driver = uc.Chrome(options=options)
+        driver = uc.Chrome(options=options, version_main=145)
         
         # Supprime la propriété webdriver
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")

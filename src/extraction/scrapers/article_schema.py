@@ -5,7 +5,7 @@ class ContentBlock(BaseModel):
     type: Literal["paragraphe", "image", "heading"]
     content: str | None = None
 
-class ArticalSchema(BaseModel):
+class ArticleSchema(BaseModel):
     id: str
     source: str
     title: str

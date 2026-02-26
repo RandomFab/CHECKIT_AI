@@ -1,8 +1,9 @@
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 from src.extraction.core.selenium_scrapper import SeleniumScraper
 from config.config import BASE_DIR
 from config.logger import logger
-from src.extraction.scrapers.article_schema import ArticalSchema
+from src.extraction.scrapers.article_schema import ArticleSchema
+import hashlib
 
 
 class AfpScrapper(SeleniumScraper):
@@ -56,7 +57,7 @@ class AfpScrapper(SeleniumScraper):
         # NIVEAU 2
         for i, url in enumerate(urls):
             logger.info(f"[AFP] Scraping article {i+1}/{len(urls)} : {url}")
-            article_data = self._scrape_article(url)
+            article_data = self._scrape_afp_article(url)
             if article_data:
                 results.append(article_data)
             else:
@@ -65,7 +66,7 @@ class AfpScrapper(SeleniumScraper):
         logger.info(f"[AFP] Extraction terminée : {len(results)}/{len(urls)} articles récupérés")
         return results
 
-    def _scrape_article(self, url: str) -> dict | None:
+    def _scrape_afp_article(self, url: str) -> dict | None:
         try:
             soup2 = self._get_soup(url)
             if not soup2:
@@ -102,8 +103,8 @@ class AfpScrapper(SeleniumScraper):
             content_blocks = self._parse_body_wrapper(soup2)
             logger.debug(f"[AFP] {len(content_blocks)} blocs extraits pour : {url}")
 
-            article = ArticalSchema(
-                id = f"afp_{hash(url) % 100000:05d}",
+            article = ArticleSchema(
+                id = f"afp_{hashlib.md5(url.encode()).hexdigest()[:8]}",
                 source = self.source_name,
                 title = title,
                 date = date,
@@ -127,10 +128,10 @@ class AfpScrapper(SeleniumScraper):
             logger.warning("[AFP] div.wrapper-body introuvable — le sélecteur est peut-être incorrect")
             return blocks  # ← retour immédiat, évite le crash ci-dessous
 
-        children = [e for e in body_wrapper.children if not (isinstance(e, str) and not e.strip())]
+        children = [e for e in body_wrapper.children if isinstance(e, Tag)]
         logger.debug(f"[AFP] {len(children)} éléments enfants dans wrapper-body")
 
-        for element in body_wrapper.children:
+        for element in children:
 
             if element.name == "p":
                 text = element.get_text(strip=True)
