@@ -77,3 +77,8 @@ class GoogleFactCheckScrapper(APIClient):
                 page += 1
 
         return results
+
+
+if __name__ == "__main__":
+    scraper = GoogleFactCheckScrapper(queries=["politique", "vaccin", "élection"])
+    scraper.run()

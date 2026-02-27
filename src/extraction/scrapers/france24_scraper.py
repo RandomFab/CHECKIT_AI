@@ -192,3 +192,8 @@ class France24Scraper(SeleniumScraper):
                     blocks.append({"type": "heading", "content": text})
 
         return blocks
+
+
+if __name__ == "__main__":
+    scraper = France24Scraper()
+    scraper.run()

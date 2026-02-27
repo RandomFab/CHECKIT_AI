@@ -153,3 +153,8 @@ class AfpScrapper(SeleniumScraper):
     def close(self):
         """Ferme le driver Selenium (hérité de SeleniumScraper)."""
         super().close()
+
+
+if __name__ == "__main__":
+    scraper = AfpScrapper()
+    scraper.run()
