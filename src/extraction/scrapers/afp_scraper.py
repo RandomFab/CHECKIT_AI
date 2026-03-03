@@ -1,9 +1,11 @@
+import hashlib
+import urllib.parse
+
 from bs4 import BeautifulSoup, Tag
 from src.extraction.core.selenium_scrapper import SeleniumScraper
 from config.config import BASE_DIR
 from config.logger import logger
 from src.extraction.scrapers.article_schema import ArticleSchema
-import hashlib
 
 
 class AfpScrapper(SeleniumScraper):
@@ -92,7 +94,9 @@ class AfpScrapper(SeleniumScraper):
             if image_div:
                 img = image_div.find("img")
                 if img:
-                    main_image = img.get("src")
+                    raw_src = img.get("src", "")
+                    # Convertit les URLs relatives (/sites/...) en absolues
+                    main_image = urllib.parse.urljoin(self.BASE_URL, raw_src)
                     logger.debug(f"[AFP] Image principale : {main_image}")
                 else:
                     logger.warning(f"[AFP] div.image-wrapper trouvée mais pas d'<img> dedans sur : {url}")
@@ -126,10 +130,15 @@ class AfpScrapper(SeleniumScraper):
 
         if not body_wrapper:
             logger.warning("[AFP] div.wrapper-body introuvable — le sélecteur est peut-être incorrect")
-            return blocks  # ← retour immédiat, évite le crash ci-dessous
+            return blocks
 
-        children = [e for e in body_wrapper.children if isinstance(e, Tag)]
-        logger.debug(f"[AFP] {len(children)} éléments enfants dans wrapper-body")
+        # Le contenu réel est dans un div imbriqué (field--name-body),
+        # pas en enfant direct de wrapper-body
+        content_div = body_wrapper.find("div", class_="field--name-body")
+        root = content_div if content_div else body_wrapper
+
+        children = [e for e in root.children if isinstance(e, Tag)]
+        logger.debug(f"[AFP] {len(children)} éléments enfants dans field--name-body")
 
         for element in children:
 
@@ -141,7 +150,9 @@ class AfpScrapper(SeleniumScraper):
             elif element.name == "div" and "wrapper-image" in (element.get("class") or []):
                 img = element.find("img")
                 if img and img.get("src"):
-                    blocks.append({"type": "image", "content": img.get("src")})
+                    # Convertit les URLs relatives en absolues
+                    full_url = urllib.parse.urljoin(self.BASE_URL, img.get("src"))
+                    blocks.append({"type": "image", "content": full_url})
 
             elif element.name in ["h1", "h2", "h3", "h4"]:
                 text = element.get_text(strip=True)
