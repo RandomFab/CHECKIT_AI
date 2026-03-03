@@ -5,6 +5,8 @@ from config.config import BASE_DIR
 from config.logger import logger
 import hashlib
 import os
+import requests
+from bs4 import BeautifulSoup
 
 load_dotenv()
 
@@ -20,6 +22,19 @@ class GoogleFactCheckScrapper(APIClient):
         self.api_key = os.getenv("GOOGLE_FACT_CHECK_API_KEY")
         self.queries = queries
         self.lang = lang
+
+    def _get_og_image(self, url: str) -> str | None:
+        """Tente de récupérer l'image Open Graph d'une page HTML."""
+        try:
+            response = requests.get(url, timeout=10)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, "html.parser")
+                og_image = soup.find("meta", property="og:image")
+                if og_image and og_image.get("content"):
+                    return og_image["content"]
+        except Exception as e:
+            logger.warning(f"Impossible de récupérer l'image OG pour {url}: {e}")
+        return None
 
     def extract(self) -> list[dict]:
         urls = []
@@ -54,6 +69,9 @@ class GoogleFactCheckScrapper(APIClient):
                         claim_label = claim_review.get("textualRating", "")
                         claim_text = claim.get("text", "")
 
+                        logger.info(f"[GoogleFactCheck] Récupération de l'image pour {claim_url}")
+                        main_image = self._get_og_image(claim_url)
+
                         article = ArticleSchema(
                             id=f"gfc_{hashlib.md5(claim_url.encode()).hexdigest()[:8]}",
                             source=self.source_name,
@@ -61,7 +79,7 @@ class GoogleFactCheckScrapper(APIClient):
                             date=claim_date,
                             url=claim_url,
                             label=claim_label,
-                            main_image=None,
+                            main_image=main_image,
                             content_blocks=[
                                 ContentBlock(type="paragraphe", content=claim_text)
                             ],

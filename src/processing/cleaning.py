@@ -61,8 +61,9 @@ def clean_text_content(content_text: str) -> str:
 def is_url_reachable(url: str) -> bool:
     """Vérifie si l'URL répond avec un code succès (200)."""
     try:
-
-        response = requests.head(url, timeout=5, allow_redirects=True)
+        from src.processing.image_handler import _get_session
+        session = _get_session(url)
+        response = session.head(url, timeout=5, allow_redirects=True)
         return response.status_code == 200
     except requests.RequestException as e:
         logger.error(f"URL non joignable : {url} - Erreur: {e}")

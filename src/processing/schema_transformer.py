@@ -74,8 +74,8 @@ def extract_text_from_blocks(
     extracted_texts = []
 
     for idx, block in enumerate(content_blocks):
-        # On ne traite que les blocs de type 'paragraphe' avec du contenu
-        if block.get("type") == "paragraphe" and block.get("content"):
+        # On ne traite que les blocs de type 'heading' ou 'paragraphe' avec du contenu
+        if block.get("type") in ["heading", "paragraphe"] and block.get("content"):
             raw_text = block["content"]
             try:
                 cleaned_text = clean_text_content(raw_text)
@@ -117,9 +117,12 @@ def validate_article_url(url: str) -> bool:
 
 
 def validate_article_is_multimodal(article: dict) -> bool:
-    """Vérifie qu'un article contient au moins un bloc image ET un bloc texte.
+    """Vérifie qu'un article contient au moins une image (bloc ou image principale) ET un bloc texte.
     Un article multimodal est requis pour l'entraînement du modèle."""
-    has_image = any(b.get("type") == "image" for b in article.get("content_blocks", []))
+    has_image = (
+        any(b.get("type") == "image" for b in article.get("content_blocks", []))
+        or bool(article.get("main_image"))
+    )
     has_text = any(b.get("type") == "paragraphe" for b in article.get("content_blocks", []))
     return has_image and has_text
 
