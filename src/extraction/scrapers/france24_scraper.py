@@ -1,4 +1,4 @@
-from src.extraction.core.selenium_scrapper import SeleniumScraper
+from src.extraction.core.selenium_scraper import SeleniumScraper
 from config.config import BASE_DIR
 from config.logger import logger
 from bs4 import BeautifulSoup, Tag

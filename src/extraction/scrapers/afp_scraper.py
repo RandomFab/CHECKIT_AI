@@ -2,13 +2,13 @@ import hashlib
 import urllib.parse
 
 from bs4 import BeautifulSoup, Tag
-from src.extraction.core.selenium_scrapper import SeleniumScraper
+from src.extraction.core.selenium_scraper import SeleniumScraper
 from config.config import BASE_DIR
 from config.logger import logger
 from src.extraction.scrapers.article_schema import ArticleSchema
 
 
-class AfpScrapper(SeleniumScraper):
+class AfpScraper(SeleniumScraper):
     BASE_URL = "https://factuel.afp.com/"
 
     def __init__(self, headless: bool = False):
@@ -167,5 +167,5 @@ class AfpScrapper(SeleniumScraper):
 
 
 if __name__ == "__main__":
-    scraper = AfpScrapper()
+    scraper = AfpScraper()
     scraper.run()

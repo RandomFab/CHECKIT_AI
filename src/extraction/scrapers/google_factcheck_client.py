@@ -11,16 +11,16 @@ from bs4 import BeautifulSoup
 load_dotenv()
 
 
-class GoogleFactCheckScrapper(APIClient):
+class GoogleFactCheckScraper(APIClient):
 
-    def __init__(self, queries: list[str], lang: str = "fr"):
+    def __init__(self, queries: list[str] = None, lang: str = "fr"):
         super().__init__(
             source_name="google_fact_check",
             output_dir=BASE_DIR / "data" / "raw" / "google_fact_check",
             base_url="https://factchecktools.googleapis.com/v1alpha1/",
         )
         self.api_key = os.getenv("GOOGLE_FACT_CHECK_API_KEY")
-        self.queries = queries
+        self.queries = queries or ["politique", "vaccin", "élection"]
         self.lang = lang
 
     def _get_og_image(self, url: str) -> str | None:
@@ -98,5 +98,5 @@ class GoogleFactCheckScrapper(APIClient):
 
 
 if __name__ == "__main__":
-    scraper = GoogleFactCheckScrapper(queries=["politique", "vaccin", "élection"])
+    scraper = GoogleFactCheckScraper()
     scraper.run()
