@@ -1,116 +1,204 @@
 """
-## CheckIt.AI - Pipeline ETL
+DAG : get_multimodal_news_dataset
 
-Orchestre l'extraction (scraping), la transformation et la sauvegarde
-des articles de fact-checking.
+Extraction, nettoyage et chargement de news factuelles multi-sources.
+
+Flux Airflow :
+    scrap_AfpScraper ──────────┐
+    scrap_France24Scraper ─────┤
+    scrap_GoogleFactCheck ─────┤→ process_{source} (parallèle) → merge → parquet → rapport
+    scrap_FakeNewsNet ─────────┘
 """
 
+from datetime import datetime, timedelta
+from pathlib import Path
+
 from airflow.sdk import dag, task
-from pendulum import datetime
 
 
 @dag(
-    start_date=datetime(2025, 7, 1),
-    schedule="@weekly",
+    dag_id="get_multimodal_news_dataset",
+    description="Extraction, nettoyage et chargement de news factuelles multi-sources",
+    start_date=datetime(2026, 2, 1),
     catchup=False,
-    doc_md=__doc__,
-    default_args={"owner": "checkit", "retries": 1},
-    tags=["checkit", "etl"],
+    schedule="@daily",
+    max_active_runs=1,
+    default_args={
+        "owner": "RandomFab",
+        "retries": 3,
+        "retry_delay": timedelta(minutes=5),
+    },
+    tags=["extraction"],
 )
-def checkit_pipeline():
+def extract_news_workflow():
 
-    @task()
-    def extract_afp() -> str:
-        """Scrape AFP Factuel et sauvegarde dans data/raw/afp/data.json"""
+    # ------------------------------------------------------------------ #
+    # TÂCHE 1 : Scraping (une tâche par source, en parallèle)            #
+    # ------------------------------------------------------------------ #
+    @task
+    def scrap_news_task(scraper_name: str) -> dict:
+        """Lance le scraper de la source et retourne le chemin du dossier raw."""
         from src.extraction.scrapers.afp_scraper import AfpScraper
-
-        scraper = AfpScraper(headless=True)
-        try:
-            data = scraper.extract()
-            scraper.save(data)
-            return f"AFP: {len(data)} articles extraits"
-        finally:
-            scraper.close()
-
-    @task()
-    def extract_france24() -> str:
-        """Scrape France 24 Les Observateurs"""
         from src.extraction.scrapers.france24_scraper import France24Scraper
-
-        scraper = France24Scraper(headless=True)
-        try:
-            data = scraper.extract()
-            scraper.save(data)
-            return f"F24: {len(data)} articles extraits"
-        finally:
-            scraper.close()
-
-    @task()
-    def extract_google_factcheck() -> str:
-        """Interroge l'API Google Fact Check"""
         from src.extraction.scrapers.google_factcheck_client import GoogleFactCheckScraper
-
-        scraper = GoogleFactCheckScraper()
-        data = scraper.extract()
-        scraper.save(data)
-        return f"GFC: {len(data)} articles extraits"
-
-    @task()
-    def extract_fakenewsnet() -> str:
-        """Télécharge le dataset FakeNewsNet depuis Kaggle"""
         from src.extraction.scrapers.fakenewsnet_scraper import FakeNewsNetScraper
 
-        scraper = FakeNewsNetScraper()
-        data = scraper.extract()
-        scraper.save(data)
-        return f"FNN: {len(data)} articles extraits"
+        scrapers = {
+            "AfpScraper":             AfpScraper,
+            "France24Scraper":        France24Scraper,
+            "GoogleFactCheckScraper": GoogleFactCheckScraper,
+            # "FakeNewsNetScraper":   FakeNewsNetScraper,  # désactivé
+        }
 
-    @task()
-    def transform_and_save(extraction_results: list[str]) -> dict:
-        """Transforme toutes les sources et sauvegarde en Parquet"""
-        from src.processing.pipeline import process_all_sources, save_to_parquet
-        from config.config import RAW_DATA_DIR, PROCESSED_DATA_DIR
+        scraper_cls = scrapers[scraper_name]
+        scraper = scraper_cls()
+        scraper.run()
 
-        articles, images, summary = process_all_sources(RAW_DATA_DIR, PROCESSED_DATA_DIR)
-        save_to_parquet(articles, images, PROCESSED_DATA_DIR)
+        return {
+            "scraper_name": scraper_name,
+            "source_dir":   str(scraper.output_dir),
+        }
 
+    # ------------------------------------------------------------------ #
+    # TÂCHE 2 : Transformation (une tâche par source, en parallèle)      #
+    # ------------------------------------------------------------------ #
+    @task
+    def process_source_task(scrap_result: dict) -> dict:
+        """Transforme les articles bruts d'une source et écrit un JSON tmp sur disque.
+        Ne retourne que les stats via XCom (pas les données brutes).
+        """
+        from config.config import PROCESSED_DATA_DIR
+        from src.processing.pipeline import process_source
+
+        stats = process_source(
+            source_dir=Path(scrap_result["source_dir"]),
+            output_dir=PROCESSED_DATA_DIR,
+        )
+        return stats
+
+    # ------------------------------------------------------------------ #
+    # TÂCHE 3 : Merge — attend TOUTES les sources                        #
+    # ------------------------------------------------------------------ #
+    @task
+    def merge_sources_task(all_stats: list[dict]) -> dict:
+        """Fusionne les fichiers JSON tmp de chaque source en une seule liste.
+        Lit depuis disque, écrit merged_*.json sur disque.
+        Ne retourne que le summary via XCom.
+        """
+        from src.processing.pipeline import merge_sources
+
+        summary = merge_sources(all_stats)
         return summary
 
-    @task()
-    def report_summary(summary: dict) -> str:
-        """Affiche un résumé détaillé des stats de traitement par source"""
+    # ------------------------------------------------------------------ #
+    # TÂCHE 4 : Sauvegarde Parquet                                       #
+    # ------------------------------------------------------------------ #
+    @task
+    def save_to_parquet_task(summary: dict) -> dict:
+        """Lit les fichiers fusionnés et les sauvegarde en Parquet."""
+        from config.config import PROCESSED_DATA_DIR
+        from src.processing.pipeline import save_to_parquet
+
+        final_stats = save_to_parquet(
+            summary=summary,
+            output_dir=PROCESSED_DATA_DIR,
+        )
+        # On enrichit avec le summary pour le rapport final
+        final_stats["summary"] = summary
+        return final_stats
+
+    # ------------------------------------------------------------------ #
+    # TÂCHE 5 : Chargement Postgres                                      #
+    # ------------------------------------------------------------------ #
+    @task
+    def load_to_postgres_task(stats: dict) -> str:
+        """Charge les fichiers Parquet dans Postgres."""
+        from airflow.providers.postgres.hooks.postgres import PostgresHook
+        from config.config import PROCESSED_DATA_DIR
+        import pandas as pd
+
+        hook = PostgresHook(postgres_conn_id="postgres_default")
+        engine = hook.get_sqlalchemy_engine()
+
+        articles_path = PROCESSED_DATA_DIR / "articles.parquet"
+        images_path   = PROCESSED_DATA_DIR / "images.parquet"
+
+        if articles_path.exists():
+            df = pd.read_parquet(articles_path)
+            df.to_sql("articles", engine, if_exists="replace", index=False)
+
+        if images_path.exists():
+            df = pd.read_parquet(images_path)
+            df.to_sql("images", engine, if_exists="replace", index=False)
+
+        return (
+            f"Postgres chargé : "
+            f"{stats['articles_count']} articles, "
+            f"{stats['images_count']} images."
+        )
+
+    # ------------------------------------------------------------------ #
+    # TÂCHE 6 : Rapport final                                            #
+    # ------------------------------------------------------------------ #
+    @task
+    def report_summary_task(postgres_result: str, parquet_stats: dict) -> None:
+        """Affiche un rapport de synthèse lisible dans les logs Airflow."""
         from config.logger import logger
-        
-        logger.info("=" * 70)
-        logger.info("📊 RÉSUMÉ FINAL DU PIPELINE")
-        logger.info("=" * 70)
-        logger.info(f"Total articles lus: {summary['total_articles']}")
-        logger.info(f"Articles valides (multimodaux): {summary['valid_multimodal']}")
-        logger.info(f"Taux global: {round(100*summary['valid_multimodal']/max(summary['total_articles'],1))}%")
-        logger.info(f"Total images téléchargées: {summary['total_images']}")
-        logger.info(f"Ignorés: {summary['skipped']}")
-        logger.info(f"Erreurs: {summary['errors']}")
-        logger.info("-" * 70)
-        
-        for source, stats in summary.get("by_source", {}).items():
-            pct = round(100*stats['valid']/max(stats['total'],1)) if stats['total'] > 0 else 0
-            logger.info(f"[{source}] {stats['valid']}/{stats['total']} ({pct}%)")
-        
-        logger.info("=" * 70)
-        return "Pipeline terminé avec succès"
 
-    # --- Orchestration ---
-    # Les extractions tournent en parallèle
-    afp = extract_afp()
-    f24 = extract_france24()
-    gfc = extract_google_factcheck()
-    fnn = extract_fakenewsnet()
+        summary = parquet_stats.get("summary", {})
+        by_source = summary.get("by_source", {})
 
-    # La transformation attend que TOUTES les extractions soient terminées
-    summary = transform_and_save(extraction_results=[afp, f24, gfc, fnn])
-    
-    # Le résumé s'affiche après la transformation
-    report_summary(summary)
+        logger.info("=" * 60)
+        logger.info("  RAPPORT FINAL — CheckIt.AI Pipeline")
+        logger.info("=" * 60)
+        logger.info(f"  Articles valides    : {summary.get('valid_multimodal', 0)}/{summary.get('total_articles', 0)}")
+        logger.info(f"  Articles ignorés    : {summary.get('skipped', 0)}")
+        logger.info(f"  Erreurs             : {summary.get('errors', 0)}")
+        logger.info(f"  Images téléchargées : {summary.get('total_images', 0)}")
+        logger.info("")
+        logger.info("  Détail par source :")
+        logger.info(f"  {'Source':<25} {'Articles':>10} {'Taux':>6} {'Images':>8} {'Taux img':>9}")
+        logger.info(f"  {'-'*25} {'-'*10} {'-'*6} {'-'*8} {'-'*9}")
+        for source, s in by_source.items():
+            logger.info(
+                f"  {source:<25} "
+                f"{s['valid']:>4}/{s['total']:<5} "
+                f"{s['taux_articles']:>6} "
+                f"{s['images']:>8} "
+                f"{s['taux_images']:>9}"
+            )
+        logger.info("=" * 60)
+        logger.info(f"  Postgres : {postgres_result}")
+        logger.info("=" * 60)
+
+    # ------------------------------------------------------------------ #
+    # ORCHESTRATION                                                       #
+    # ------------------------------------------------------------------ #
+    scrapers = [
+        "AfpScraper",
+        "France24Scraper",
+        "GoogleFactCheckScraper",
+        # "FakeNewsNetScraper",  # désactivé
+    ]
+
+    # Étape 1+2 : Scraping + transformation en parallèle pour chaque source
+    all_process_results = []
+    for scraper_name in scrapers:
+        scrap_result    = scrap_news_task.override(task_id=f"scrap_{scraper_name}")(scraper_name)
+        process_result  = process_source_task.override(task_id=f"process_{scraper_name}")(scrap_result)
+        all_process_results.append(process_result)
+
+    # Étape 3 : Merge quand toutes les sources sont prêtes
+    merged = merge_sources_task(all_process_results)
+
+    # Étape 4 : Sauvegarde Parquet
+    parquet_stats = save_to_parquet_task(merged)
+
+    # Étape 5 : Chargement Postgres
+    postgres_result = load_to_postgres_task(parquet_stats)
+
+    # Étape 6 : Rapport final
+    report_summary_task(postgres_result, parquet_stats)
 
 
-checkit_pipeline()
+extract_news_workflow()

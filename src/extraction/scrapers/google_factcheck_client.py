@@ -20,7 +20,7 @@ class GoogleFactCheckScraper(APIClient):
             base_url="https://factchecktools.googleapis.com/v1alpha1/",
         )
         self.api_key = os.getenv("GOOGLE_FACT_CHECK_API_KEY")
-        self.queries = queries or ["politique", "vaccin", "élection"]
+        self.queries = queries or ["politique"] #, "vaccin", "élection"
         self.lang = lang
 
     def _get_og_image(self, url: str) -> str | None:
