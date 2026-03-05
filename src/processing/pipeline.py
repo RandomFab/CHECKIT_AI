@@ -93,6 +93,8 @@ def _transform_one_article(raw_article: dict, images_output_dir: Path) -> tuple[
     """
     article_id = raw_article.get("id", "")
 
+    logger.info(f"[Pipeline] Traitement article : {article_id}")
+
     # --- Validation 1 : article multimodal ? (texte ET image) ---
     # Un article sans image ou sans texte ne sert pas à notre cas d'usage IA.
     if not validate_article_is_multimodal(raw_article):
@@ -205,8 +207,10 @@ def process_source(source_dir: Path, output_dir: Path) -> tuple[list, list, dict
             stats["errors"] += 1
 
     logger.info(
-        f"[{source_name}] Terminé — "
-        f"valid={stats['valid']}, skipped={stats['skipped']}, errors={stats['errors']}"
+        f"[{source_name}] ✓ Traitement terminé — "
+        f"valid={stats['valid']}/{stats['total']}, "
+        f"images={len(images)}, "
+        f"taux={round(100*stats['valid']/max(stats['total'],1))}%"
     )
     return articles, images, stats
 

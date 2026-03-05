@@ -62,8 +62,9 @@ class AfpScraper(SeleniumScraper):
             article_data = self._scrape_afp_article(url)
             if article_data:
                 results.append(article_data)
+                logger.info(f"[AFP]   ✓ Réussi")
             else:
-                logger.warning(f"[AFP] Article ignoré (erreur) : {url}")
+                logger.info(f"[AFP]   ✗ Raté")
 
         logger.info(f"[AFP] Extraction terminée : {len(results)}/{len(urls)} articles récupérés")
         return results

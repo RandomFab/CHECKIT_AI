@@ -71,6 +71,10 @@ class GoogleFactCheckScraper(APIClient):
 
                         logger.info(f"[GoogleFactCheck] Récupération de l'image pour {claim_url}")
                         main_image = self._get_og_image(claim_url)
+                        if main_image:
+                            logger.info(f"[GoogleFactCheck]   ✓ Image récupérée")
+                        else:
+                            logger.info(f"[GoogleFactCheck]   ✗ Pas d'image")
 
                         article = ArticleSchema(
                             id=f"gfc_{hashlib.md5(claim_url.encode()).hexdigest()[:8]}",

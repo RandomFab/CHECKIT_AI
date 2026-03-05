@@ -96,7 +96,6 @@ def normalize_article_label(label: str) -> str:
     """Normalise le label brut d'un article en 'vrai', 'faux' ou 'partiellement_faux'.
     Retourne 'inconnu' si le label ne peut pas être mappé avec confiance."""
     normalized = normalize_label(label)
-    logger.info(f"Label '{label}' → '{normalized}'")
     return normalized
 
 
