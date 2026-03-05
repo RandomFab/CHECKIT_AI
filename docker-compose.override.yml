@@ -1,0 +1,37 @@
+services:
+  # Conteneur Selenium Standalone Chrome - pour Selenium scraping dans Airflow/Docker
+  selenium-chrome:
+    image: selenium/standalone-chrome:latest
+    container_name: selenium-chrome
+    shm_size: "2g"
+    ports:
+      - "4444:4444"   # WebDriver protocol
+      - "7900:7900"   # noVNC (debug visuel) - http://localhost:7900 - mot de passe: secret
+    environment:
+      - SE_NODE_MAX_SESSIONS=3
+      - SE_SESSION_REQUEST_TIMEOUT=300
+      - SE_NODE_SESSION_TIMEOUT=300
+      - SE_VNC_NO_SOCKET=true
+    networks:
+      - airflow
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4444/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Passer SELENIUM_REMOTE_URL au scheduler Airflow
+  scheduler:
+    environment:
+      - SELENIUM_REMOTE_URL=http://selenium-chrome:4444/wd/hub
+
+  # Passer SELENIUM_REMOTE_URL au triggerer Airflow
+  triggerer:
+    environment:
+      - SELENIUM_REMOTE_URL=http://selenium-chrome:4444/wd/hub
+
+networks:
+  airflow:
+    external: true
+    name: checkit-ai_ed62fb_airflow

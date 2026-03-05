@@ -41,6 +41,11 @@ def _get_session(url: str) -> requests.Session:
     - Premier appel pour un domaine : ouvre Chrome, visite la page d'accueil,
       transfère les cookies dans une requests.Session, met en cache.
     - Appels suivants : retourne la session mise en cache directement.
+    
+    Mode 1 (Docker/Airflow) : Si SELENIUM_REMOTE_URL est défini,
+    connecte à un conteneur Selenium distant.
+    
+    Mode 2 (Local) : Utilise webdriver.Chrome local.
     """
     domain = _origin(url)
 
@@ -51,8 +56,11 @@ def _get_session(url: str) -> requests.Session:
     session = requests.Session()
 
     try:
+        import os
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
+
+        remote_url = os.getenv("SELENIUM_REMOTE_URL")
 
         options = Options()
         options.add_argument("--no-sandbox")
@@ -61,10 +69,29 @@ def _get_session(url: str) -> requests.Session:
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
 
-        driver = webdriver.Chrome(options=options)
-        driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
-            "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-        })
+        if remote_url:
+            # --- Mode REMOTE ---
+            logger.debug(f"[ImageHandler] WebDriver REMOTE : {remote_url}")
+            driver = webdriver.Remote(
+                command_executor=remote_url,
+                options=options,
+            )
+        else:
+            # --- Mode LOCAL ---
+            logger.debug(f"[ImageHandler] WebDriver LOCAL")
+            driver = webdriver.Chrome(options=options)
+
+        # execute_cdp_cmd ne fonctionne qu'en local (Chrome direct)
+        # En remote, on utilise execute_script à la place
+        try:
+            driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+                "source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            })
+        except Exception:
+            # En Remote, CDP n'est pas dispo — on continue sans
+            driver.execute_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+            )
 
         driver.get(domain + "/")
         time.sleep(2)  # laisse Akamai/JS fixer les cookies

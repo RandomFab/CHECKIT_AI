@@ -2,7 +2,12 @@
 from pathlib import Path
 
 # --- Chemin base projet ---
-BASE_DIR = Path(__file__).resolve().parent.parent
+# En Docker (Airflow), AIRFLOW_HOME = /usr/local/airflow
+# En local, on remonte depuis config/
+if os.getenv("AIRFLOW_HOME"):
+    BASE_DIR = Path(os.getenv("AIRFLOW_HOME"))
+else:
+    BASE_DIR = Path(__file__).resolve().parent.parent
 
 # --- Chemins data ---
 EXTERNAL_DATA_DIR = BASE_DIR / 'data' / 'external'
