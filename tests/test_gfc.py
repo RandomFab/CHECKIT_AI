@@ -1,7 +1,7 @@
 import json
-from src.extraction.scrapers.google_factcheck_client import GoogleFactCheckScrapper
+from src.extraction.scrapers.google_factcheck_client import GoogleFactCheckScraper
 
-scraper = GoogleFactCheckScrapper(
+scraper = GoogleFactCheckScraper(
     queries=[
                 # Politique & société
         "politique",

@@ -1,4 +1,4 @@
-from src.extraction.core.selenium_scrapper import SeleniumScraper
+from src.extraction.core.selenium_scraper import SeleniumScraper
 from config.config import BASE_DIR
 from config.logger import logger
 from bs4 import BeautifulSoup, Tag
@@ -88,8 +88,9 @@ class France24Scraper(SeleniumScraper):
             article_data = self._scrape_f24_article(url)
             if article_data:
                 results.append(article_data)
+                logger.info(f"[F24]   ✓ Réussi")
             else:
-                logger.warning(f"[F24] Article ignoré (erreur) : {url}")
+                logger.info(f"[F24]   ✗ Raté")
 
         logger.info(f"[F24] Extraction terminée : {len(results)}/{len(urls)} articles récupérés")
         return results

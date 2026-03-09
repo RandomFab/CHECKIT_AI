@@ -1,0 +1,26 @@
+# Astro Runtime includes the following pre-installed providers packages: https://www.astronomer.io/docs/astro/runtime-image-architecture#provider-packages
+
+# Airflow Providers
+apache-airflow-providers-postgres>=5.0.0
+
+# Scraping & Automation
+selenium>=4.41.0
+beautifulsoup4>=4.12.0
+
+# HTTP & Data
+requests>=2.31.0
+pandas>=2.0.0
+pyarrow>=15.0.0
+
+# Image processing
+pillow>=10.0.0
+
+# Data validation & parsing
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# Fuzzy matching
+thefuzz>=0.22.1
+
+# External API & datasets
+kagglehub>=1.0.0

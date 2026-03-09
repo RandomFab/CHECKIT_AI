@@ -4,10 +4,7 @@ import re
 from config.logger import logger
 import requests
 
-from src.utils.decorators import log_text_modification
-
 # --- Title, Paragraphe content blocks ---
-@log_text_modification
 def _clean_bad_encoded_text(text: str) -> str:
     """Répare les problèmes d'encodage (ex: &eacute; ou Ã©) et normalise l'Unicode."""
     if not text:
@@ -23,7 +20,6 @@ def _clean_bad_encoded_text(text: str) -> str:
     return unicodedata.normalize("NFKC", text)
 
 
-@log_text_modification
 def _clean_multispaces(text: str) -> str:
     """Supprime les espaces doubles, tabulations et espaces de début/fin."""
     if not text:
@@ -33,13 +29,11 @@ def _clean_multispaces(text: str) -> str:
     return text.strip()
 
 
-@log_text_modification
 def _remove_urls(text: str) -> str:
     """Supprime les liens HTTP/HTTPS."""
     return re.sub(r"https?://\S+|www\.\S+", "", text)
 
 
-@log_text_modification
 def _remove_html_tags(text: str) -> str:
     """Supprime les balises HTML résiduelles (ex: <p>, <div>)."""
     return re.sub(r"<.*?>", "", text)

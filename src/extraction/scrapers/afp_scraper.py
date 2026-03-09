@@ -2,13 +2,13 @@ import hashlib
 import urllib.parse
 
 from bs4 import BeautifulSoup, Tag
-from src.extraction.core.selenium_scrapper import SeleniumScraper
+from src.extraction.core.selenium_scraper import SeleniumScraper
 from config.config import BASE_DIR
 from config.logger import logger
 from src.extraction.scrapers.article_schema import ArticleSchema
 
 
-class AfpScrapper(SeleniumScraper):
+class AfpScraper(SeleniumScraper):
     BASE_URL = "https://factuel.afp.com/"
 
     def __init__(self, headless: bool = False):
@@ -62,8 +62,9 @@ class AfpScrapper(SeleniumScraper):
             article_data = self._scrape_afp_article(url)
             if article_data:
                 results.append(article_data)
+                logger.info(f"[AFP]   ✓ Réussi")
             else:
-                logger.warning(f"[AFP] Article ignoré (erreur) : {url}")
+                logger.info(f"[AFP]   ✗ Raté")
 
         logger.info(f"[AFP] Extraction terminée : {len(results)}/{len(urls)} articles récupérés")
         return results
@@ -167,5 +168,5 @@ class AfpScrapper(SeleniumScraper):
 
 
 if __name__ == "__main__":
-    scraper = AfpScrapper()
+    scraper = AfpScraper()
     scraper.run()

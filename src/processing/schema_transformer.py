@@ -52,7 +52,7 @@ def extract_images_from_blocks(
                             "image_url": url,
                             "local_path": str(file_path),
                             "format": img_format,
-                            "size": img_size,
+                            "size": list(img_size) if img_size is not None else None,
                         }
                     )
         except Exception as e:
@@ -96,7 +96,6 @@ def normalize_article_label(label: str) -> str:
     """Normalise le label brut d'un article en 'vrai', 'faux' ou 'partiellement_faux'.
     Retourne 'inconnu' si le label ne peut pas être mappé avec confiance."""
     normalized = normalize_label(label)
-    logger.info(f"Label '{label}' → '{normalized}'")
     return normalized
 
 

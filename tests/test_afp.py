@@ -1,6 +1,6 @@
-from src.extraction.scrapers.afp_scraper import AfpScrapper
+from src.extraction.scrapers.afp_scraper import AfpScraper
 
-scraper = AfpScrapper()
+scraper = AfpScraper()
 
 data = scraper.extract()
 
