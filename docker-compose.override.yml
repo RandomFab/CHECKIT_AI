@@ -21,10 +21,12 @@ services:
       timeout: 5s
       retries: 5
 
-  # Passer SELENIUM_REMOTE_URL au scheduler Airflow
+  # Passer SELENIUM_REMOTE_URL au scheduler Airflow + monter data/ pour persistance
   scheduler:
     environment:
       - SELENIUM_REMOTE_URL=http://selenium-chrome:4444/wd/hub
+    volumes:
+      - ./data:/usr/local/airflow/data
 
   # Passer SELENIUM_REMOTE_URL au triggerer Airflow
   triggerer:

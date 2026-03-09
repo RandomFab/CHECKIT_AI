@@ -52,7 +52,7 @@ def extract_images_from_blocks(
                             "image_url": url,
                             "local_path": str(file_path),
                             "format": img_format,
-                            "size": img_size,
+                            "size": list(img_size) if img_size is not None else None,
                         }
                     )
         except Exception as e:

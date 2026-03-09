@@ -12,6 +12,7 @@ Flux Airflow :
 
 from datetime import datetime, timedelta
 from pathlib import Path
+from config.logger import logger
 
 from airflow.sdk import dag, task
 
@@ -126,15 +127,25 @@ def extract_news_workflow():
         if articles_path.exists():
             df = pd.read_parquet(articles_path)
             df.to_sql("articles", engine, if_exists="replace", index=False)
+            articles_loaded = len(df)
+        else:
+            logger.warning("[Postgres] Fichier articles.parquet introuvable — chargement ignoré.")
+            articles_loaded = 0
 
         if images_path.exists():
             df = pd.read_parquet(images_path)
+            if "size" in df.columns:
+                df["size"] = df["size"].apply(lambda x: x.tolist() if hasattr(x, "tolist") else x)
             df.to_sql("images", engine, if_exists="replace", index=False)
+            images_loaded = len(df)
+        else:
+            logger.warning("[Postgres] Fichier images.parquet introuvable — chargement ignoré.")
+            images_loaded = 0
 
         return (
             f"Postgres chargé : "
-            f"{stats['articles_count']} articles, "
-            f"{stats['images_count']} images."
+            f"{articles_loaded} articles, "
+            f"{images_loaded} images."
         )
 
     # ------------------------------------------------------------------ #
