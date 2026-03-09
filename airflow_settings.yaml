@@ -8,12 +8,12 @@
 airflow:
   connections:
     - conn_id: postgres_default
-      conn_type: postgres
-      conn_host: postgres
-      conn_schema: airflow
-      conn_login: postgres
-      conn_password: postgres
-      conn_port: 5432
+      conn_type: ${DB_TYPE}
+      conn_host: ${DB_HOST}
+      conn_schema: ${DB_SCHEMA}
+      conn_login: ${DB_LOGIN}
+      conn_password: ${DB_PASSWORD}
+      conn_port: ${DB_PORT}
   pools:
     - pool_name:
       pool_slot:

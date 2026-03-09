@@ -1,0 +1,22 @@
+-- ============================================
+-- 🔐 CRÉATION DES RÔLES POSTGRES
+-- ============================================
+-- À exécuter via : python scripts/setup_db.py
+
+-- 1️⃣ RÔLE ADMIN (migrations, gestion BD)
+CREATE USER admin WITH PASSWORD 'CHANGE_ME_admin';
+GRANT ALL PRIVILEGES ON DATABASE checkit TO admin;
+GRANT ALL PRIVILEGES ON SCHEMA public TO admin;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO admin;
+
+-- 2️⃣ RÔLE WRITER (DAG Airflow - INSERT/UPDATE/DELETE)
+CREATE USER writer WITH PASSWORD 'CHANGE_ME_writer';
+GRANT CONNECT ON DATABASE checkit TO writer;
+GRANT USAGE ON SCHEMA public TO writer;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO writer;
+
+-- 3️⃣ RÔLE READER (Rapports - SELECT uniquement)
+CREATE USER reader WITH PASSWORD 'CHANGE_ME_reader';
+GRANT CONNECT ON DATABASE checkit TO reader;
+GRANT USAGE ON SCHEMA public TO reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO reader;

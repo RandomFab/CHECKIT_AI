@@ -11,4 +11,6 @@ wheels/
 
 .env
 
+sql/init_roles.sql
+
 data
