@@ -40,6 +40,9 @@ class GoogleFactCheckScraper(APIClient):
         urls = []
         results = []
 
+        # Déduplication : charge une fois toutes les URLs déjà en base
+        existing_urls = self._fetch_existing_urls()
+
         # Niveau 1
         for query in self.queries:
 
@@ -61,6 +64,11 @@ class GoogleFactCheckScraper(APIClient):
                 for claim in data.get("claims", []):
                     claim_review = claim["claimReview"][0]
                     claim_url = claim_review["url"]
+
+                    if claim_url in existing_urls:
+                        self.already_in_db += 1
+                        logger.debug(f"[GoogleFactCheck] Déjà en base, ignoré : {claim_url}")
+                        continue
 
                     if claim_url not in urls:
                         urls.append(claim_url)

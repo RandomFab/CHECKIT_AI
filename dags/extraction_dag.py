@@ -60,6 +60,7 @@ def extract_news_workflow():
         return {
             "scraper_name": scraper_name,
             "source_dir":   str(scraper.output_dir),
+            "already_in_db": scraper.already_in_db,
         }
 
     # ------------------------------------------------------------------ #
@@ -76,6 +77,7 @@ def extract_news_workflow():
         stats = process_source(
             source_dir=Path(scrap_result["source_dir"]),
             output_dir=PROCESSED_DATA_DIR,
+            already_in_db=scrap_result.get("already_in_db", 0),
         )
         return stats
 
@@ -187,6 +189,7 @@ def extract_news_workflow():
         logger.info("=" * 60)
         logger.info(f"  Articles valides    : {summary.get('valid_multimodal', 0)}/{summary.get('total_articles', 0)}")
         logger.info(f"  Articles ignorés    : {summary.get('skipped', 0)}")
+        logger.info(f"  Déjà en base (skip) : {summary.get('already_in_db', 0)}")
         logger.info(f"  Erreurs             : {summary.get('errors', 0)}")
         logger.info(f"  Images téléchargées : {summary.get('total_images', 0)}")
         logger.info("")
@@ -199,7 +202,8 @@ def extract_news_workflow():
                 f"{s['valid']:>4}/{s['total']:<5} "
                 f"{s['taux_articles']:>6} "
                 f"{s['images']:>8} "
-                f"{s['taux_images']:>9}"
+                f"{s['taux_images']:>9} "
+                f"  db_skip={s.get('already_in_db', 0)}"
             )
         logger.info("=" * 60)
         logger.info(f"  Postgres : {postgres_result}")

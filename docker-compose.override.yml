@@ -29,6 +29,8 @@ services:
       - SELENIUM_REMOTE_URL=http://selenium-chrome:4444/wd/hub
     volumes:
       - ./data:/usr/local/airflow/data
+      - ./src:/usr/local/airflow/src
+      - ./config:/usr/local/airflow/config
 
   # Passer SELENIUM_REMOTE_URL au triggerer Airflow
   triggerer:
@@ -36,6 +38,9 @@ services:
       - .env
     environment:
       - SELENIUM_REMOTE_URL=http://selenium-chrome:4444/wd/hub
+    volumes:
+      - ./src:/usr/local/airflow/src
+      - ./config:/usr/local/airflow/config
 
 networks:
   airflow:

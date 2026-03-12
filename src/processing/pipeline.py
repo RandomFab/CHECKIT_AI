@@ -122,7 +122,7 @@ def _transform_one_article(
 # 3. TRAITEMENT D'UNE SOURCE
 # ---------------------------------------------------------------------------
 
-def process_source(source_dir: Path, output_dir: Path) -> dict:
+def process_source(source_dir: Path, output_dir: Path, already_in_db: int = 0) -> dict:
     """Traite une source complète et écrit un JSON intermédiaire sur disque.
 
     Pourquoi écrire sur disque plutôt que retourner les données ?
@@ -153,6 +153,7 @@ def process_source(source_dir: Path, output_dir: Path) -> dict:
         "skipped_not_multimodal":   0,  # Gate 1 : pas d'image ou pas de texte
         "skipped_bad_label":        0,  # Gate 2 : label non mappable
         "skipped_no_image":         0,  # Gate 3 : 0 image téléchargée
+        "already_in_db":            already_in_db,  # URLs ignorées car déjà en base
         "errors":                   0,
         "images_count":             0,
         "duration_seconds":         0.0,
@@ -213,6 +214,7 @@ def process_source(source_dir: Path, output_dir: Path) -> dict:
         f"[{source_name}] ✓ Terminé — "
         f"valid={stats['valid']}/{stats['total']} ({taux}%), "
         f"images={stats['images_count']} ({taux_img}% des articles valides), "
+        f"already_in_db={stats['already_in_db']}, "
         f"skipped={stats['skipped']} (non_multimodal={stats['skipped_not_multimodal']}, "
         f"bad_label={stats['skipped_bad_label']}, no_image={stats['skipped_no_image']}), "
         f"errors={stats['errors']}, durée={stats['duration_seconds']}s"
@@ -252,6 +254,7 @@ def merge_sources(all_stats: list[dict]) -> dict:
         "valid_multimodal": 0,
         "total_images": 0,
         "skipped": 0,
+        "already_in_db": 0,
         "errors": 0,
         "by_source": {},
     }
@@ -270,6 +273,7 @@ def merge_sources(all_stats: list[dict]) -> dict:
         summary["valid_multimodal"] += stats["valid"]
         summary["total_images"]     += stats["images_count"]
         summary["skipped"]          += stats["skipped"]
+        summary["already_in_db"]    += stats.get("already_in_db", 0)
         summary["errors"]           += stats["errors"]
         summary["by_source"][source_name] = {
             "total":                    stats["total"],
@@ -278,6 +282,7 @@ def merge_sources(all_stats: list[dict]) -> dict:
             "skipped_not_multimodal":   stats.get("skipped_not_multimodal", 0),
             "skipped_bad_label":        stats.get("skipped_bad_label", 0),
             "skipped_no_image":         stats.get("skipped_no_image", 0),
+            "already_in_db":            stats.get("already_in_db", 0),
             "errors":                   stats["errors"],
             "images":                   stats["images_count"],
             "duration_seconds":         stats.get("duration_seconds", 0.0),
@@ -289,6 +294,7 @@ def merge_sources(all_stats: list[dict]) -> dict:
         f"[Pipeline] ✓ Fusion terminée — "
         f"articles={summary['valid_multimodal']}, "
         f"images={summary['total_images']}, "
+        f"already_in_db={summary['already_in_db']}, "
         f"ignorés={summary['skipped']}, erreurs={summary['errors']}"
     )
 
@@ -385,17 +391,23 @@ def persist_run_stats(stats: dict) -> None:
                         skipped_not_multimodal INT,
                         skipped_bad_label      INT,
                         skipped_no_image       INT,
+                        already_in_db          INT DEFAULT 0,
                         errors                 INT,
                         images_count           INT,
                         duration_seconds       FLOAT
                     )
                 """)
+                # Migration : ajoute la colonne si elle n'existait pas encore
+                cur.execute("""
+                    ALTER TABLE pipeline_runs
+                    ADD COLUMN IF NOT EXISTS already_in_db INT DEFAULT 0
+                """)
                 cur.execute("""
                     INSERT INTO pipeline_runs (
                         source, total, valid,
                         skipped_not_multimodal, skipped_bad_label, skipped_no_image,
-                        errors, images_count, duration_seconds
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        already_in_db, errors, images_count, duration_seconds
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     stats["source"],
                     stats["total"],
@@ -403,6 +415,7 @@ def persist_run_stats(stats: dict) -> None:
                     stats["skipped_not_multimodal"],
                     stats["skipped_bad_label"],
                     stats["skipped_no_image"],
+                    stats.get("already_in_db", 0),
                     stats["errors"],
                     stats["images_count"],
                     stats.get("duration_seconds", 0.0),

@@ -64,10 +64,13 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
     skipped_not_multimodal INT,
     skipped_bad_label      INT,
     skipped_no_image       INT,
+    already_in_db          INT DEFAULT 0,
     errors                 INT,
     images_count           INT,
     duration_seconds       FLOAT
 );
+-- Migration pour les bases existantes :
+ALTER TABLE pipeline_runs ADD COLUMN IF NOT EXISTS already_in_db INT DEFAULT 0;
 
 -- Appliquer les droits sur les tables qu'on vient de créer
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO writer;

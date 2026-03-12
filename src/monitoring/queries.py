@@ -73,17 +73,24 @@ def get_articles_by_source():
 # ============================================================================
 
 def get_articles_with_images_pct():
-    """% articles avec ≥1 image.
+    """% articles multimodaux (avec ≥1 image) au moment de l'extraction — dernier run.
+
+    On lit pipeline_runs plutôt que la table articles, car articles ne contient
+    que les articles déjà filtrés (le taux y serait toujours ~100%).
+    skipped_not_multimodal = articles rejetés faute d'image à l'extraction.
 
     Retourne : DataFrame avec colonnes [total_articles, with_images, pct]
     """
     query = """
     SELECT 
-        COUNT(DISTINCT a.id) as total_articles,
-        COUNT(DISTINCT i.article_id) as with_images,
-        ROUND(100.0 * COUNT(DISTINCT i.article_id) / COUNT(DISTINCT a.id), 1) as pct
-    FROM articles a
-    LEFT JOIN images i ON a.id = i.article_id;
+        SUM(total) as total_articles,
+        SUM(total - skipped_not_multimodal) as with_images,
+        ROUND(
+            100.0 * SUM(total - skipped_not_multimodal) / NULLIF(SUM(total), 0),
+            1
+        ) as pct
+    FROM pipeline_runs
+    WHERE DATE(run_at) = DATE((SELECT MAX(run_at) FROM pipeline_runs));
     """
     return _execute_query(query, "get_articles_with_images_pct()")
 
