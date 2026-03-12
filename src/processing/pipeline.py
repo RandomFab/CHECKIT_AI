@@ -18,6 +18,7 @@ Flux :
 """
 
 import json
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -63,17 +64,27 @@ def read_raw_json(source_dir: Path) -> list[dict]:
 # 2. TRANSFORMATION (1 article)
 # ---------------------------------------------------------------------------
 
-def _transform_one_article(raw_article: dict, images_output_dir: Path) -> tuple[dict | None, list[dict]]:
-    """Transforme 1 article brut en 2 entités : ARTICLE + liste d'IMAGES."""
+def _transform_one_article(
+    raw_article: dict, images_output_dir: Path
+) -> tuple[dict | None, list[dict], str | None]:
+    """Transforme 1 article brut en 2 entités : ARTICLE + liste d'IMAGES.
+
+    Returns:
+        (article_row, images_rows, skip_reason)
+        skip_reason vaut None si l'article est valide, sinon :
+          - 'not_multimodal' : pas d'image ou pas de texte
+          - 'bad_label'      : label non mappable (inconnu)
+          - 'no_image'       : 0 image téléchargée avec succès
+    """
     article_id = raw_article.get("id", "")
 
     if not validate_article_is_multimodal(raw_article):
         logger.warning(f"[Pipeline] ✗ Article ignoré (non multimodal) : {article_id}")
-        return None, []
+        return None, [], "not_multimodal"
 
     if not validate_article_has_label(raw_article):
         logger.warning(f"[Pipeline] ✗ Article ignoré (label non mappable) : {article_id}")
-        return None, []
+        return None, [], "bad_label"
 
     text_blocks = extract_text_from_blocks(raw_article.get("content_blocks", []), article_id)
     content = " ".join(block["cleaned_text"] for block in text_blocks)
@@ -87,7 +98,7 @@ def _transform_one_article(raw_article: dict, images_output_dir: Path) -> tuple[
 
     if not images_rows:
         logger.warning(f"[Pipeline] ✗ Article ignoré (0 image téléchargée) : {article_id}")
-        return None, []
+        return None, [], "no_image"
 
     article_row = {
         "id":               article_id,
@@ -104,7 +115,7 @@ def _transform_one_article(raw_article: dict, images_output_dir: Path) -> tuple[
     for img in images_rows:
         img["id"] = str(uuid.uuid4())
 
-    return article_row, images_rows
+    return article_row, images_rows, None
 
 
 # ---------------------------------------------------------------------------
@@ -124,6 +135,7 @@ def process_source(source_dir: Path, output_dir: Path) -> dict:
         stats dict avec total/valid/skipped/errors + chemins des fichiers intermédiaires.
     """
     source_name = source_dir.name
+    start_time = time.time()
     images_dir = output_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
 
@@ -134,12 +146,16 @@ def process_source(source_dir: Path, output_dir: Path) -> dict:
     articles = []
     images = []
     stats = {
-        "source": source_name,
-        "total": 0,
-        "valid": 0,
-        "skipped": 0,
-        "errors": 0,
-        "images_count": 0,
+        "source":                   source_name,
+        "total":                    0,
+        "valid":                    0,
+        "skipped":                  0,
+        "skipped_not_multimodal":   0,  # Gate 1 : pas d'image ou pas de texte
+        "skipped_bad_label":        0,  # Gate 2 : label non mappable
+        "skipped_no_image":         0,  # Gate 3 : 0 image téléchargée
+        "errors":                   0,
+        "images_count":             0,
+        "duration_seconds":         0.0,
         # Chemins des fichiers intermédiaires pour la tâche merge
         "articles_tmp": str(tmp_dir / f"{source_name}_articles.json"),
         "images_tmp":   str(tmp_dir / f"{source_name}_images.json"),
@@ -161,11 +177,17 @@ def process_source(source_dir: Path, output_dir: Path) -> dict:
         url = raw_article.get("url", article_id)
         logger.info(f"[{source_name}] Traitement : {url}")
         try:
-            article_row, images_rows = _transform_one_article(raw_article, images_dir)
+            article_row, images_rows, skip_reason = _transform_one_article(raw_article, images_dir)
 
             if article_row is None:
                 stats["skipped"] += 1
-                logger.info(f"[{source_name}] ✗ Raté  : {url}")
+                if skip_reason == "not_multimodal":
+                    stats["skipped_not_multimodal"] += 1
+                elif skip_reason == "bad_label":
+                    stats["skipped_bad_label"] += 1
+                elif skip_reason == "no_image":
+                    stats["skipped_no_image"] += 1
+                logger.info(f"[{source_name}] ✗ Raté ({skip_reason}) : {url}")
                 continue
 
             articles.append(article_row)
@@ -177,7 +199,8 @@ def process_source(source_dir: Path, output_dir: Path) -> dict:
             logger.error(f"[{source_name}] ✗ Erreur inattendue sur {url} : {e}")
             stats["errors"] += 1
 
-    stats["images_count"] = len(images)
+    stats["images_count"]   = len(images)
+    stats["duration_seconds"] = round(time.time() - start_time, 2)
 
     # Écriture sur disque — XCom ne reçoit que les stats
     _write_tmp(articles, stats["articles_tmp"])
@@ -190,8 +213,19 @@ def process_source(source_dir: Path, output_dir: Path) -> dict:
         f"[{source_name}] ✓ Terminé — "
         f"valid={stats['valid']}/{stats['total']} ({taux}%), "
         f"images={stats['images_count']} ({taux_img}% des articles valides), "
-        f"skipped={stats['skipped']}, errors={stats['errors']}"
+        f"skipped={stats['skipped']} (non_multimodal={stats['skipped_not_multimodal']}, "
+        f"bad_label={stats['skipped_bad_label']}, no_image={stats['skipped_no_image']}), "
+        f"errors={stats['errors']}, durée={stats['duration_seconds']}s"
     )
+
+    # Persistance des stats en DB pour le monitoring
+    try:
+        persist_run_stats(stats)
+    except Exception as e:
+        import traceback
+        logger.error(f"[{source_name}] ✗ Impossible de persister les stats de run : {e}")
+        logger.error(traceback.format_exc())
+
     return stats
 
 
@@ -238,11 +272,15 @@ def merge_sources(all_stats: list[dict]) -> dict:
         summary["skipped"]          += stats["skipped"]
         summary["errors"]           += stats["errors"]
         summary["by_source"][source_name] = {
-            "total":        stats["total"],
-            "valid":        stats["valid"],
-            "skipped":      stats["skipped"],
-            "errors":       stats["errors"],
-            "images":       stats["images_count"],
+            "total":                    stats["total"],
+            "valid":                    stats["valid"],
+            "skipped":                  stats["skipped"],
+            "skipped_not_multimodal":   stats.get("skipped_not_multimodal", 0),
+            "skipped_bad_label":        stats.get("skipped_bad_label", 0),
+            "skipped_no_image":         stats.get("skipped_no_image", 0),
+            "errors":                   stats["errors"],
+            "images":                   stats["images_count"],
+            "duration_seconds":         stats.get("duration_seconds", 0.0),
             "taux_articles": f"{round(100 * stats['valid'] / max(stats['total'], 1))}%",
             "taux_images":  f"{round(100 * stats['images_count'] / max(stats['valid'], 1))}%",
         }
@@ -311,6 +349,68 @@ def save_to_parquet(summary: dict, output_dir: Path) -> dict:
         "articles_count": len(articles),
         "images_count":   len(images),
     }
+
+
+# ---------------------------------------------------------------------------
+# PERSISTANCE DES STATS DE RUN
+# ---------------------------------------------------------------------------
+
+def persist_run_stats(stats: dict) -> None:
+    """Insère les stats d'un run source dans la table `pipeline_runs` (Postgres).
+
+    Crée la table si elle n'existe pas encore (idempotent).
+    Utilise les variables d'env DB_HOST, DB_PORT, DB_NAME, DB_WRITER_USER,
+    DB_WRITER_PASSWORD pour la connexion.
+    """
+    import os
+    import psycopg2
+
+    conn = psycopg2.connect(
+        host=os.getenv("DB_HOST", "localhost"),
+        port=int(os.getenv("DB_PORT", "5432")),
+        dbname=os.getenv("DB_NAME", "checkit"),
+        user=os.getenv("DB_WRITER_USER", "writer"),
+        password=os.getenv("DB_WRITER_PASSWORD", ""),
+    )
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS pipeline_runs (
+                        id                     SERIAL PRIMARY KEY,
+                        run_at                 TIMESTAMP DEFAULT NOW(),
+                        source                 VARCHAR(50),
+                        total                  INT,
+                        valid                  INT,
+                        skipped_not_multimodal INT,
+                        skipped_bad_label      INT,
+                        skipped_no_image       INT,
+                        errors                 INT,
+                        images_count           INT,
+                        duration_seconds       FLOAT
+                    )
+                """)
+                cur.execute("""
+                    INSERT INTO pipeline_runs (
+                        source, total, valid,
+                        skipped_not_multimodal, skipped_bad_label, skipped_no_image,
+                        errors, images_count, duration_seconds
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    stats["source"],
+                    stats["total"],
+                    stats["valid"],
+                    stats["skipped_not_multimodal"],
+                    stats["skipped_bad_label"],
+                    stats["skipped_no_image"],
+                    stats["errors"],
+                    stats["images_count"],
+                    stats.get("duration_seconds", 0.0),
+                ))
+    finally:
+        conn.close()
+
+    logger.info(f"[{stats['source']}] ✓ Stats persistées dans pipeline_runs")
 
 
 # ---------------------------------------------------------------------------

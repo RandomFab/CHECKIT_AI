@@ -20,3 +20,56 @@ CREATE USER reader WITH PASSWORD 'CHANGE_ME_reader';
 GRANT CONNECT ON DATABASE checkit TO reader;
 GRANT USAGE ON SCHEMA public TO reader;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO reader;
+
+-- 4️⃣ PRIVILÈGES PAR DÉFAUT (tables créées après le setup)
+-- Permet à writer et reader d'accéder aux tables créées dynamiquement par le pipeline
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO writer;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT SELECT ON TABLES TO reader;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO writer;
+
+-- 5️⃣ CRÉATION DES TABLES
+-- Créées ici pour garantir leur existence avant le 1er run du pipeline
+
+CREATE TABLE IF NOT EXISTS articles (
+    id               VARCHAR(255) PRIMARY KEY,
+    source           VARCHAR(50),
+    title            TEXT,
+    content          TEXT,
+    label            VARCHAR(50),
+    publication_date TIMESTAMP,
+    author           TEXT,
+    url              TEXT,
+    created_at       TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS images (
+    id          UUID PRIMARY KEY,
+    article_id  VARCHAR(255) REFERENCES articles(id) ON DELETE CASCADE,
+    url         TEXT,
+    local_path  TEXT,
+    size        TEXT,
+    format      VARCHAR(20),
+    created_at  TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+    id                     SERIAL PRIMARY KEY,
+    run_at                 TIMESTAMP DEFAULT NOW(),
+    source                 VARCHAR(50),
+    total                  INT,
+    valid                  INT,
+    skipped_not_multimodal INT,
+    skipped_bad_label      INT,
+    skipped_no_image       INT,
+    errors                 INT,
+    images_count           INT,
+    duration_seconds       FLOAT
+);
+
+-- Appliquer les droits sur les tables qu'on vient de créer
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO writer;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO reader;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO writer;

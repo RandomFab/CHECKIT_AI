@@ -9,7 +9,9 @@ Flux Airflow :
     scrap_GoogleFactCheck ─────┤→ process_{source} (parallèle) → merge → parquet → rapport
     scrap_FakeNewsNet ─────────┘
 """
+from dotenv import load_dotenv
 
+load_dotenv()
 from datetime import datetime, timedelta
 from pathlib import Path
 from config.logger import logger
@@ -114,33 +116,54 @@ def extract_news_workflow():
     @task
     def load_to_postgres_task(stats: dict) -> str:
         """Charge les fichiers Parquet dans Postgres."""
-        from airflow.providers.postgres.hooks.postgres import PostgresHook
+        import os
+        from sqlalchemy import create_engine, text
         from config.config import PROCESSED_DATA_DIR
         import pandas as pd
 
-        hook = PostgresHook(postgres_conn_id="postgres_default")
-        engine = hook.get_sqlalchemy_engine()
+        # Construire la connection string depuis les variables d'env
+        db_url = (
+            f"postgresql://"
+            f"{os.getenv('DB_WRITER_USER', 'writer')}:"
+            f"{os.getenv('DB_WRITER_PASSWORD', '')}@"
+            f"{os.getenv('DB_HOST', 'localhost')}:"
+            f"{os.getenv('DB_PORT', '5432')}/"
+            f"{os.getenv('DB_NAME', 'checkit')}"
+        )
+        engine = create_engine(db_url)
 
         articles_path = PROCESSED_DATA_DIR / "articles.parquet"
         images_path   = PROCESSED_DATA_DIR / "images.parquet"
 
+        # Vider les tables AVANT d'insérer (TRUNCATE CASCADE)
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("TRUNCATE TABLE articles CASCADE"))
+                conn.execute(text("TRUNCATE TABLE images CASCADE"))
+            logger.info("[Postgres] Tables vidées (TRUNCATE)")
+        except Exception as e:
+            logger.warning(f"[Postgres] Erreur lors du TRUNCATE : {e}")
+
+        articles_loaded = 0
+        images_loaded = 0
+
         if articles_path.exists():
             df = pd.read_parquet(articles_path)
-            df.to_sql("articles", engine, if_exists="replace", index=False)
+            df.to_sql("articles", engine, if_exists="append", index=False)
             articles_loaded = len(df)
+            logger.info(f"[Postgres] {articles_loaded} articles chargés")
         else:
             logger.warning("[Postgres] Fichier articles.parquet introuvable — chargement ignoré.")
-            articles_loaded = 0
 
         if images_path.exists():
             df = pd.read_parquet(images_path)
             if "size" in df.columns:
                 df["size"] = df["size"].apply(lambda x: x.tolist() if hasattr(x, "tolist") else x)
-            df.to_sql("images", engine, if_exists="replace", index=False)
+            df.to_sql("images", engine, if_exists="append", index=False)
             images_loaded = len(df)
+            logger.info(f"[Postgres] {images_loaded} images chargées")
         else:
             logger.warning("[Postgres] Fichier images.parquet introuvable — chargement ignoré.")
-            images_loaded = 0
 
         return (
             f"Postgres chargé : "

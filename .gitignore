@@ -14,3 +14,7 @@ wheels/
 sql/init_roles.sql
 
 data
+reports/
+.streamlit/
+__pycache__/
+*.pyc
