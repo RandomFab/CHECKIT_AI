@@ -55,6 +55,14 @@ class AfpScraper(SeleniumScraper):
 
         logger.info(f"[AFP] {len(urls)} URLs extraites")
 
+        # Déduplication : filtre les URLs déjà présentes en base
+        existing_urls = self._fetch_existing_urls()
+        filtered_urls = [url for url in urls if url not in existing_urls]
+        self.already_in_db = len(urls) - len(filtered_urls)
+        if self.already_in_db > 0:
+            logger.info(f"[AFP] {self.already_in_db} article(s) déjà en base → ignorés")
+        urls = filtered_urls
+
         results = []
         # NIVEAU 2
         for i, url in enumerate(urls):

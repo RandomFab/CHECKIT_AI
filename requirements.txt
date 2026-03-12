@@ -9,7 +9,7 @@ beautifulsoup4>=4.12.0
 
 # HTTP & Data
 requests>=2.31.0
-pandas>=2.0.0
+pandas>=2.0.0,<3
 pyarrow>=15.0.0
 
 # Image processing
@@ -24,3 +24,6 @@ thefuzz>=0.22.1
 
 # External API & datasets
 kagglehub>=1.0.0
+
+# Dashboard
+streamlit>=1.40.0

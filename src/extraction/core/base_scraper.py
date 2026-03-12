@@ -1,7 +1,10 @@
-from config.config import BASE_DIR
+import json
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
-import json
+
+from config.config import BASE_DIR
+from config.logger import logger
 
 
 class BaseScraper(ABC):
@@ -11,6 +14,8 @@ class BaseScraper(ABC):
         self.source_name = source_name
         self.output_dir = output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        # Nombre d'URLs ignorées car déjà présentes en base
+        self.already_in_db: int = 0
 
     @abstractmethod
     def extract(self) -> list[dict]:
@@ -30,6 +35,31 @@ class BaseScraper(ABC):
         ]
         """
         pass
+
+    def _fetch_existing_urls(self) -> set:
+        """Retourne l'ensemble des URLs déjà présentes en base pour cette source.
+
+        Interroge la table `articles` filtrée par `source_name`.
+        Retourne un set vide si la base est inaccessible (pas d'erreur fatale).
+        """
+        try:
+            import psycopg2
+            conn = psycopg2.connect(
+                host=os.getenv("DB_HOST", "localhost"),
+                port=int(os.getenv("DB_PORT", "5432")),
+                dbname=os.getenv("DB_NAME", "checkit"),
+                user=os.getenv("DB_WRITER_USER", "writer"),
+                password=os.getenv("DB_WRITER_PASSWORD", ""),
+            )
+            with conn.cursor() as cur:
+                cur.execute("SELECT url FROM articles WHERE source = %s", (self.source_name,))
+                existing = {row[0] for row in cur.fetchall()}
+            conn.close()
+            logger.info(f"[{self.source_name}] {len(existing)} URL(s) déjà en base → déduplication activée")
+            return existing
+        except Exception as e:
+            logger.warning(f"[{self.source_name}] Base inaccessible, déduplication désactivée : {e}")
+            return set()
 
     def save(self, data: list[dict], filename: str = "data.json"):
         """

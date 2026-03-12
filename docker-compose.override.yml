@@ -23,15 +23,24 @@ services:
 
   # Passer SELENIUM_REMOTE_URL au scheduler Airflow + monter data/ pour persistance
   scheduler:
+    env_file:
+      - .env
     environment:
       - SELENIUM_REMOTE_URL=http://selenium-chrome:4444/wd/hub
     volumes:
       - ./data:/usr/local/airflow/data
+      - ./src:/usr/local/airflow/src
+      - ./config:/usr/local/airflow/config
 
   # Passer SELENIUM_REMOTE_URL au triggerer Airflow
   triggerer:
+    env_file:
+      - .env
     environment:
       - SELENIUM_REMOTE_URL=http://selenium-chrome:4444/wd/hub
+    volumes:
+      - ./src:/usr/local/airflow/src
+      - ./config:/usr/local/airflow/config
 
 networks:
   airflow:
