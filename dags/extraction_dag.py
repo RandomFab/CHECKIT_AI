@@ -5,9 +5,9 @@ Extraction, nettoyage et chargement de news factuelles multi-sources.
 
 Flux Airflow :
     scrap_AfpScraper ──────────┐
-    scrap_France24Scraper ─────┤
-    scrap_GoogleFactCheck ─────┤→ process_{source} (parallèle) → merge → parquet → rapport
-    scrap_FakeNewsNet ─────────┘
+    scrap_France24Scraper ─────┤→ process_{source} (parallèle) → merge → parquet → rapport
+    scrap_GoogleFactCheck ─────┘
+
 """
 from dotenv import load_dotenv
 
