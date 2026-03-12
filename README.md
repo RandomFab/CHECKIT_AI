@@ -105,6 +105,8 @@ sequenceDiagram
     Parquet->>DB: TRUNCATE + INSERT articles & images
 ```
 
+![DAG Airflow](images/dag_airflow.png)
+
 ---
 
 ## 🗂️ Structure des fichiers
@@ -264,6 +266,8 @@ streamlit run src/monitoring/dashboard.py
 ```
 
 6 sections : alertes actives, KPI cards, volumes par source, distribution des labels, taux de validation sur 7j, entonnoir de validation du dernier run.
+
+![Dashboard Monitoring](images/sample_dashboard.png)
 
 ---
 
